@@ -2,23 +2,38 @@
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 # erebor
-![logo](dev/erebor.png)
-<!-- badges: start -->
-<!-- badges: end -->
 
-The goal of erebor is to …
+<img src="https://gitee.com/rainoffallingstar/ereboR/blob/master/dev/erebor.png" height="200" align="right"/>
+<!-- badges: start --> <!-- badges: end -->
 
-What is special about using `README.Rmd` instead of just `README.md`?
-You can include R chunks like so:
+The goal of erebor is to build a R6-based package for bulk RNAseq and
+RRBS analysis.
+
+## Installation
+
+You can install the development version of sell:
 
 ``` r
-#summary(cars)
+# FILL THIS IN! HOW CAN PEOPLE INSTALL YOUR DEV PACKAGE?
+pak::pak("rainoffallingstar/ereboR")
 ```
 
-You’ll still need to render `README.Rmd` regularly, to keep `README.md`
-up-to-date.
+## Example
 
-You can also embed plots, for example:
+This is a basic example which shows you how to solve a common problem:
 
-In that case, don’t forget to commit and push the resulting figure
-files, so they display on GitHub.
+``` r
+library(erebor)
+## the upstream analysis of RNA-seq
+
+BagginsClass$new(...)
+
+## the upstream analysis of RRBS
+
+SamwiseClass$new(...)
+
+## download public data from TGCA/GEO
+
+laml <- MoriaClass$new(mine = "TCGA-LAML",Dwarf_worker = "TGCA")
+laml$download()
+```
