@@ -2,7 +2,7 @@
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 # erebor
-
+![logo](dev/erebor.png)
 <!-- badges: start -->
 <!-- badges: end -->
 
