@@ -13,11 +13,14 @@ Imports:
     data.table,
     dplyr,
     fs,
+    GEOquery,
     glue,
     magrittr,
     R6,
     readr,
-    stringr
+    stringr,
+    SummarizedExperiment,
+    TCGAbiolinks
 Suggests: 
     knitr,
     rmarkdown,

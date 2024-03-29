@@ -66,6 +66,20 @@ object2 <- SamwiseClass$new(root_dir = "batch1117", type = "cpg")
 
   
 
+# moriaclass
+
+    
+
+  
+
+```{r example-moriaclass}
+laml <- MoriaClass$new(mine = "TCGA-LAML",Dwarf_worker = "TGCA")
+```
+
+  
+
+  
+
 
 <!-- 
 - Verify your `"DESCRIPTION"` file has been updated

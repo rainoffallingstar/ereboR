@@ -3,11 +3,12 @@ flat_first.Rmd:
   state: active
   R:
   - R/bagginsclass.R
+  - R/moriaclass.R
   - R/samwiseclass.R
-  - R/description-of-your-package.R
   tests:
   - tests/testthat/test-bagginsclass.R
   - tests/testthat/test-samwiseclass.R
+  - tests/testthat/test-moriaclass.R
   vignettes: vignettes/get-started.Rmd
   inflate:
     flat_file: dev/flat_first.Rmd
