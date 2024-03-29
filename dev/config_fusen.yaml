@@ -4,6 +4,7 @@ flat_first.Rmd:
   R:
   - R/bagginsclass.R
   - R/samwiseclass.R
+  - R/description-of-your-package.R
   tests:
   - tests/testthat/test-bagginsclass.R
   - tests/testthat/test-samwiseclass.R

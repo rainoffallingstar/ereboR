@@ -29,8 +29,8 @@ fusen::fill_description(
   overwrite = TRUE,
   pkg = here::here(),
   fields = list(
-    Title = "ereboR",
-    Description = "ereboR: an R6-based package in dealing with bulk RNA-seq & cfDNA RRBS data.",
+    Title = "erebor",
+    Description = "erebor: an R6-based package in dealing with bulk RNA-seq & cfDNA RRBS data.",
     `Authors@R` = c(
       person("Yanhua", "Zheng", email = "yhzheng@cmu.edu.cn", role = c("aut", "cre"), comment = c(ORCID = "0000-0003-1103-9579"))
     )
@@ -51,9 +51,25 @@ usethis::use_pipe()
 
 ```
 
+
+```{r function-promoter_probe}
+#' promoter with gene annotation
+#' @name promoter_probe
+#' @description A database of promoter island with gene annotation information.
+#' @format A data frame with promoter island with gene annotation.
+
+```
+
+
 # bagginsclass
     
 ```{r function-bagginsclass}
+#' Human Entrez Gene Id Database
+#' @name Entrez_Gene_Id_db
+#' @description A database of Entrez Gene IDs with associated information.
+#' @format A data frame with columns for Entrez Gene IDs and annotations.
+
+
 #' BagginsClass
 #' 
 #' BagginsClass：I am going on an adventure! this is an R6 object for rnaseq upstream workflow
@@ -133,7 +149,7 @@ BagginsClass <- R6::R6Class(
           fs::file_move(df$origin_dir[i],df$dest_dir[i])
         }
       }
-      print("info::preparing files and dirs for following use")
+      print("info,preparing files and dirs for following use")
       fs::dir_create(self$bamfiles_dir)
       fs::dir_create(self$countfiles_dir)
       rnaseq_placefile(self$root_dir)
@@ -214,12 +230,12 @@ BagginsClass <- R6::R6Class(
         }
         return(expr_df)
       }
-      print("info::Step 1, refer the fastq files to genome")
+      print("info,Step 1, refer the fastq files to genome")
       rnaseq_star2annate(self$star_exe,self$root_dir,self$refer_genome,self$bamfiles_dir)
-      print("info::Step 2, index bam files and build count files in txt")
+      print("info,Step 2, index bam files and build count files in txt")
       rnaseq_bam4index(self$samtools_exe,self$bamfiles_dir)
       rnaseq_bam2counts(self$htseq_exe,self$bamfiles_dir,self$gtf_file,self$countfiles_dir)
-      print("info::Step 3,build expression matrix ")
+      print("info,Step 3,build expression matrix ")
       df <- rnaseq_count2matrix(self$countfiles_dir,self$clean_str)
       return(df)
     }
@@ -242,6 +258,11 @@ test_that("bagginsclass works", {
 # samwiseclass
     
 ```{r function-samwiseclass}
+#' CpG island with gene annotation
+#' @name cpg_probe
+#' @description A database of CpG island with gene annotation information.
+#' @format A data frame with CpG island with gene annotation.
+
 #' SamwiseClass
 #' 
 #' SamwiseClass:It's the job that's never started takes longest to finish.this is an R6 object for rrbs upstream workflow
@@ -323,7 +344,7 @@ SamwiseClass <- R6::R6Class(
 #' @return NULL
 
 initialize_dirs = function() {
-    print(paste("info:: Step 1,creat dirs for further use, as the following workflow after BSMSP-based procedure"))
+    print(paste("info, Step 1,creat dirs for further use, as the following workflow after BSMSP-based procedure"))
     fs::dir_create(self$methyratio_dir)
     fs::dir_create(self$cpgmethy_dir)
     fs::dir_create(self$cpgmethy_optimize)
@@ -333,13 +354,13 @@ initialize_dirs = function() {
 #'
 #' @return methyratio
 bam2methyratio = function() {
-    print(paste("info:: Step 2, Get methyratio values from bam files and transfer to bedgraph files"))
+    print(paste("info, Step 2, Get methyratio values from bam files and transfer to bedgraph files"))
     bamfiles <- list.files(self$root_dir, pattern = "\\.bam$", recursive = FALSE)
     fs::dir_create(self$methyratio_dir)
     fs::dir_create(paste0(self$root_dir, "/temp"))
     fs::dir_create(paste0(self$root_dir, "/processed"))
     for (i in 1:length(bamfiles)) {
-      print(paste("info::", paste0(i, "/", length(bamfiles)), ",start processing methyratio values", bamfiles[i]))
+      print(paste("info,", paste0(i, "/", length(bamfiles)), ",start processing methyratio values", bamfiles[i]))
       output_dir_txt <- paste0(self$root_dir, "/temp/", "methyratio_", stringr::str_replace(bamfiles[i], ".bam",
         ".txt"))
       output_dir_bed <- paste0(self$methyratio_dir, "/", "methyratio_", stringr::str_replace(bamfiles[i], ".bam",
@@ -348,7 +369,7 @@ bam2methyratio = function() {
       #-d /home/rstudio/methy2expr/dev/hg19/hg19.fa 23T035358.bam
       system(paste("python2", self$methyratio_py, "-I -o", output_dir_txt, "-d", self$gene_fa, paste0(self$root_dir,
         "/", bamfiles[i])))
-      print(paste("info::", paste0(i, "/", length(bamfiles)), ",start packing bedgraph files", bamfiles[i]))
+      print(paste("info,", paste0(i, "/", length(bamfiles)), ",start packing bedgraph files", bamfiles[i]))
       # 禁用科学计数法
       options(scipen = 9999)
       temp_df <- data.table::fread(output_dir_txt, header = TRUE, stringsAsFactors = FALSE) %>%
@@ -357,7 +378,7 @@ bam2methyratio = function() {
         dplyr::rename(end = pos) %>%
         dplyr::select(chr, start, end, ratio)
       data.table::fwrite(temp_df, file = output_dir_bed, sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
-      print(paste("info::", paste0(i, "/", length(bamfiles)), ",start clean files in temp dirs with txt and bam"))
+      print(paste("info,", paste0(i, "/", length(bamfiles)), ",start clean files in temp dirs with txt and bam"))
       fs::file_delete(output_dir_txt)
       fs::file_delete(paste0(self$root_dir, "/", bamfiles[i]))
       fs::file_move(paste0(self$root_dir, "/", stringr::str_replace(bamfiles[i], ".bam", ".tmpSrt.bam")), paste0(self$root_dir,
@@ -372,7 +393,7 @@ bam2methyratio = function() {
 #'
 #' @return 优化后的bedgraph文件。
   map2cpg4optimize = function() {
-    print(paste("info:: Step 3, Get CpGs or promoter regions and optimize the bedgraph files"))
+    print(paste("info, Step 3, Get CpGs or promoter regions and optimize the bedgraph files"))
     rrbs_map2cpgislands <- function(bedtools_exe, root_dir, type = c("cpg", "promoter"), cpg_bedfiles, output) {
       bedfiles <- list.files(root_dir, ".bedgraph", recursive = TRUE)
       fs::dir_create(output)
@@ -408,7 +429,7 @@ bam2methyratio = function() {
       }
     }
     rrbs_optimize4promoter <- function(root_dir, output) {
-      print(paste("info:: be careful, we will use at least 20GB RAM."))
+      print(paste("info, be careful, we will use at least 20GB RAM."))
       library(stringr)
       bedfiles <- list.files(root_dir, ".bedgraph")
       fs::dir_create(output)
@@ -579,13 +600,13 @@ bam2methyratio = function() {
       saveRDS(df, "methylationSet_promoter.RDS")
       return(df)
     }
-    print(paste("info:: Step 4, Get methylation matrix among samples && calculate M-value in option"))
+    print(paste("info, Step 4, Get methylation matrix among samples && calculate M-value in option"))
     if (self$type == "cpg") {
       df <- rrbs_cpgBED2matrix(self$cpgmethy_optimize, self$matrix_type, self$chrsex)
     } else {
       df <- rrbs_promoterBED2matrix(self$promotermethy_optimize, self$matrix_type, self$chrsex)
     }
-    print(paste("info:: congratuations! You have successfully build a methylation matrix.You can find the methylation matrix in RDS format in ",
+    print(paste("info, congratuations! You have successfully build a methylation matrix.You can find the methylation matrix in RDS format in ",
       getwd(), "/methylationSet.RDS"))
     return(df)
   }))
