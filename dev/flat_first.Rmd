@@ -92,6 +92,7 @@ BagginsClass <- R6::R6Class(
     countfiles_dir= NA,refer_genome = NA,gtf_file = NA,
     samtools_exe = NA ,htseq_exe = NA ,star_exe = NA,
     clean_str = "Aligned.sortedByCoord.out.bam_counts.txt",
+
 #' @param root_dir 根目录的路径
 #' @param bamfiles_dir BAM文件目录的路径
 #' @param countfiles_dir 计数文件目录的路径
@@ -101,6 +102,7 @@ BagginsClass <- R6::R6Class(
 #' @param htseq_exe HTSeq可执行文件的路径
 #' @param star_exe STAR可执行文件的路径
 #' @param clean_str 清理字符串的值
+
     
     initialize = function(root_dir = NA,bamfiles_dir = NULL,
                           countfiles_dir = NULL,refer_genome = NULL,gtf_file = NULL,
