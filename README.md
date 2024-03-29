@@ -3,7 +3,7 @@
 
 # erebor
 
-<img src="https://gitee.com/rainoffallingstar/ereboR/blob/master/dev/erebor.png" height="200" align="right"/>
+<img src="https://gitee.com/rainoffallingstar/rainoffallingstar/blob/mydraft/_imgbed/erebor.png" height="200" align="right"/>
 <!-- badges: start --> <!-- badges: end -->
 
 The goal of erebor is to build a R6-based package for bulk RNAseq and
