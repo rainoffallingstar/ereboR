@@ -1,5 +1,5 @@
 ---
-title: "flat_first.Rmd for working package"
+title: "ereboR: an R6-based package in dealing with bulk RNA-seq & cfDNA RRBS data"
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -25,80 +25,582 @@ Note: when you will use other flat templates, this part will be in a separate fi
 --> 
 
 ```{r description, eval=FALSE}
-# Describe your package
 fusen::fill_description(
+  overwrite = TRUE,
   pkg = here::here(),
   fields = list(
     Title = "ereboR",
-    Description = "ereboR: an R6-based package in dealing with bulk RNA-seq & cfDNA RRBS data",
+    Description = "ereboR: an R6-based package in dealing with bulk RNA-seq & cfDNA RRBS data.",
     `Authors@R` = c(
-      person("Yanhua", "Zheng", email = "zyh3084989256@gmail.com", role = c("aut", "cre"), comment = c(ORCID = "0000-0003-1103-9579")
+      person("Yanhua", "Zheng", email = "yhzheng@cmu.edu.cn", role = c("aut", "cre"), comment = c(ORCID = "0000-0003-1103-9579"))
+    )
   )
 )
+
 # Define License with use_*_license()
 usethis::use_mit_license("YanhuaZheng")
 
 usethis::use_readme_rmd()
+usethis::use_package("dplyr")
+usethis::use_package("fs")
+usethis::use_package("glue")
+usethis::use_package("stringr")
+usethis::use_package("readr")
+usethis::use_package("data.table")
+usethis::use_pipe()
 
 ```
 
-# Add one to any value
-
-This is the first tool of our wonderful package. 
-You can add `1` to any `value` using function `add_one()`.
-
-<!-- 
-This first section shows:
-
-- the three parts necessary for a package: 'function', 'examples' and 'tests'.  
-  + Note that the three following chunks have names accordingly.
-
--->
-
-```{r function-add_one}
-#' Add one to any value
+# bagginsclass
+    
+```{r function-bagginsclass}
+#' BagginsClass
 #' 
-#' @param value A numeric value
-#'
-#' @return Numeric. value + 1
+#' BagginsClass：I am going on an adventure! this is an R6 object for rnaseq upstream workflow
+#' @field root_dir character Path to the working directory for BAGGINS.
+#' @field bamfiles_dir character Path to the directory containing aligned BAM files.
+#' @field countfiles_dir character Path to the directory containing count files.
+#' @field refer_genome character Path to the reference genome used for alignment.
+#' @field gtf_file character Path to the annotation file in GTF format.
+#' @field samtools_exe character Path to the SAMtools executable.
+#' @field htseq_exe character Path to the HTSeq executable.
+#' @field star_exe character Path to the STAR executable.
+#' @field clean_str unnecessary str in the filenames
+#' @return R6 object
+#' 
 #' @export
-
-add_one <- function(value) {
-  result <- value + 1
-  return(result)
-}
+BagginsClass <- R6::R6Class(
+  "rnaseq_workflow",
+  public = list(
+    root_dir = NA,bamfiles_dir = NA,
+    countfiles_dir= NA,refer_genome = NA,gtf_file = NA,
+    samtools_exe = NA ,htseq_exe = NA ,star_exe = NA,
+    clean_str = "Aligned.sortedByCoord.out.bam_counts.txt",
+#' @param root_dir 根目录的路径
+#' @param bamfiles_dir BAM文件目录的路径
+#' @param countfiles_dir 计数文件目录的路径
+#' @param refer_genome 参考基因组的路径
+#' @param gtf_file GTF文件的路径
+#' @param samtools_exe SAMtools可执行文件的路径
+#' @param htseq_exe HTSeq可执行文件的路径
+#' @param star_exe STAR可执行文件的路径
+#' @param clean_str 清理字符串的值
+    
+    initialize = function(root_dir = NA,bamfiles_dir = NULL,
+                          countfiles_dir = NULL,refer_genome = NULL,gtf_file = NULL,
+                          samtools_exe = NULL ,htseq_exe = NULL ,star_exe = NULL,
+                          clean_str = "Aligned.sortedByCoord.out.bam_counts.txt"){
+      self$root_dir <- root_dir
+      self$bamfiles_dir <- bamfiles_dir
+      self$countfiles_dir<- countfiles_dir
+      self$refer_genome <- refer_genome
+      self$gtf_file <- gtf_file
+      self$samtools_exe <- samtools_exe
+      self$htseq_exe <- htseq_exe
+      self$star_exe <- star_exe
+      self$clean_str = clean_str
+      self$info()
+    },
+#' @method info
+#' 打印R6对象的信息
+#' 
+#' @return NULL
+    info = function(){
+      message("BagginsClass：I am going on an adventure! this is an R6 object for rnaseq upstream workflow ")
+    },
+#' @method initialize_dirs
+#' 初始化R6对象的目录
+#' 
+#' @return NULL
+    initialize_dirs = function(){
+      rnaseq_placefile <- function(root_dir){
+        files <- list.files(root_dir)
+        file_ids <- rep(NA,length(files))
+        for (i in 1:length(files)) {
+          file_ids[i] <- stringr::str_split(files[i],"_")[[1]] %>% unlist()
+        }
+        
+        for (file_id in file_ids){
+          fs::dir_create(paste0(root_dir,"/",file_id))
+          fs::dir_create(glue::glue("{root_dir}/bam_files"))
+          fs::dir_create(glue::glue("{root_dir}/bam_files/{file_id}"))
+        }
+        df <- data.frame(id = file_ids,dir = files) %>% 
+          dplyr::mutate(origin_dir = paste0(root_dir,"/",files),
+                 dest_dir = paste0(root_dir,"/",id,"/",files),
+          )
+        for (i in 1:nrow(df)) {
+          fs::file_move(df$origin_dir[i],df$dest_dir[i])
+        }
+      }
+      print("info::preparing files and dirs for following use")
+      fs::dir_create(self$bamfiles_dir)
+      fs::dir_create(self$countfiles_dir)
+      rnaseq_placefile(self$root_dir)
+    },
+#' @method fastq2matrix
+#' 将fastq文件转换为矩阵
+#' 
+#' @return 转换后的矩阵
+    fastq2matrix = function(){
+      ## 将一组样本的R1和R2 RNA_seq一同对比，使用STAR软件
+      rnaseq_star2annate <- function(star_exe,root_dir,refer_genome,bamfiles_dir){
+        sample_list <- list.files(root_dir,"\\.fastq.gz",recursive = TRUE)
+        for (sample in sample_list){
+          input_dir = paste0(root_dir,sample)
+          output_dir = paste0(bamfiles_dir,"/",sample)
+          fastq_files = list.files(input_dir)
+          fastq_r1 = paste0(input_dir,"/",fastq_files[1])
+          fastq_r2 = paste0(input_dir,"/",fastq_files[2])
+          system(paste(star_exe,
+                       '--runThreadN', '8',
+                       '--readFilesCommand', 'zcat',
+                       '--quantMode', 'GeneCounts',
+                       '--genomeDir', refer_genome,
+                       '--readFilesIn', fastq_r1,fastq_r2,
+                       '--twopassMode', 'Basic',
+                       '--outSAMunmapped', 'None',
+                       '--outSAMtype', 'BAM', 'SortedByCoordinate',
+                       '--outFileNamePrefix', output_dir))
+        }
+      }
+      rnaseq_bam4index <- function(samtool_exe,root_dir){
+        bam_file_all <- list.files(root_dir,".bam",recursive = TRUE)
+        for ( i in 1:length(bam_file_all)) {
+          origin_path <- paste0(root_dir,'/',bam_file_all[i])
+          print(paste("now we are working on",bam_file_all[i]))
+          system(
+            paste(samtool_exe,"index",origin_path))
+        }
+      }
+      
+      # 从rnaseq的bam文件进行未矫正的表达定量，使用HTSeq
+      rnaseq_bam2counts <- function(htseq_exe,root_dir,gtf_dir,output_dir){
+        # htseq-count -f bam -s no -t gene -i gene_id input.bam genes.gtf > counts.txt
+        file_ids <- list.files(root_dir,".out.bam",recursive = TRUE)
+        #file_lable <- rep(NA,length(file_ids))
+        fs::dir_create(output_dir)
+        for (i in 1:length(file_ids)){
+          print(paste("now working on ",file_ids[i]))
+          file_lable <- stringr::str_split(file_ids[i],"\\/")[[1]][2]
+          #/home/rstudio/.local/bin/htseq-count -h
+          system(
+            paste(htseq_exe," -f bam -s no -t exon -i gene_id",
+                  paste0("mds_expr/bam_files/",file_ids[i]),
+                  gtf_dir,
+                  ">",
+                  paste0(output_dir,file_lable,"_counts.txt"))
+          )
+        }
+      }
+      rnaseq_count2matrix <- function(count_dir,clean_str = "Aligned.sortedByCoord.out.bam_counts.txt"){
+        count_files <- list.files(count_dir,".txt")
+        count_list <- list()
+        for (i in 1:length(count_files)){
+          count_lable <- stringr::str_remove(count_files[i],clean_str)
+          count_table <- readr::read_tsv(paste0(count_dir,"/",count_files[i]),
+                                         col_names = FALSE) %>% 
+            dplyr::mutate(X2 = as.numeric(X2))
+          colnames(count_table) <- c("GENEID",count_lable)
+          count_list[[i]] <- count_table
+          names(count_list)[i] <- count_lable
+        }
+        expr_df <- count_list[[1]] %>% 
+          dplyr::left_join(count_list[[2]],by = "GENEID")
+        for (i in 3:length(count_list)) {
+          temp_df <- expr_df %>% 
+            dplyr::left_join(count_list[[i]])
+          expr_df <- temp_df
+        }
+        return(expr_df)
+      }
+      print("info::Step 1, refer the fastq files to genome")
+      rnaseq_star2annate(self$star_exe,self$root_dir,self$refer_genome,self$bamfiles_dir)
+      print("info::Step 2, index bam files and build count files in txt")
+      rnaseq_bam4index(self$samtools_exe,self$bamfiles_dir)
+      rnaseq_bam2counts(self$htseq_exe,self$bamfiles_dir,self$gtf_file,self$countfiles_dir)
+      print("info::Step 3,build expression matrix ")
+      df <- rnaseq_count2matrix(self$countfiles_dir,self$clean_str)
+      return(df)
+    }
+    
+  )
+  
+)
 ```
-
-<!--
-Here is an example on how to use the function.
-This should be a reproducible and working example
--->
-
-```{r examples-add_one}
-add_one(12)
-add_one(56)
+  
+```{r example-bagginsclass}
+workflow <- BagginsClass$new(root_dir = ".")
 ```
-
-<!--
-Here are some unit tests to verify the function works as expected.
--->
-
-```{r tests-add_one}
-test_that("add_one works", {
-  expect_equal(add_one(12), 13)
-  expect_equal(add_one(56), 57)
+  
+```{r tests-bagginsclass}
+test_that("bagginsclass works", {
+  expect_true(inherits(BagginsClass, "R6ClassGenerator")) 
 })
 ```
+  
+# samwiseclass
+    
+```{r function-samwiseclass}
+#' SamwiseClass
+#' 
+#' SamwiseClass:It's the job that's never started takes longest to finish.this is an R6 object for rrbs upstream workflow
+#' @field root_dir character NULL 根目录的路径。
+#' @field methyratio_dir character NULL 存储methyratio文件的目录的路径。
+#' @field cpgmethy_dir character NULL 存储CpG甲基化文件的目录的路径。
+#' @field cpgmethy_optimize character NULL 优化后的CpG甲基化文件的目录的路径。
+#' @field promotermethy_optimize character NULL 优化后的启动子甲基化文件的目录的路径。
+#' @field promotermethy_dir character NULL 存储启动子甲基化文件的目录的路径。
+#' @field methyratio_py character NULL 用于计算methyratio的Python脚本的路径。
+#' @field gene_fa character NULL 基因组序列的FASTA文件的路径。
+#' @field bedtools_exe character NULL BEDTools可执行文件的路径。
+#' @field cpg_bedfiles character NULL CpG岛的bed文件的路径。
+#' @field promoter_bedfiles character NULL 启动子区域的bed文件的路径。
+#' @field type character "promoter" 甲基化分析的类型（"cpg"或"promoter"）。
+#' @field matrix_type character "Beta-value" 矩阵表示的类型（"Beta-value"或"M-value"）。
+#' @field chrsex character "dame" 染色体性别（"dame"或"male"）。
+#' 
+#' @return R6 object
+#' 
+#' @export
+SamwiseClass <- R6::R6Class(
+  "rrbs_workflow", 
+  public = list(
+    root_dir = NULL, methyratio_dir = NULL, cpgmethy_dir = NULL,
+    cpgmethy_optimize = NULL, promotermethy_optimize = NULL, promotermethy_dir = NULL, methyratio_py = NULL, gene_fa = NULL,
+    bedtools_exe = NULL, cpg_bedfiles = NULL, promoter_bedfiles = NULL, type = "promoter", matrix_type = "Beta-value",
+    chrsex = "dame", 
+#' @method initialize
+#' 初始化R6对象的构造函数。
+#' @param root_dir character NULL 根目录的路径。
+#' @param methyratio_dir character NULL 存储methyratio文件的目录的路径。
+#' @param cpgmethy_dir character NULL 存储CpG甲基化文件的目录的路径。
+#' @param cpgmethy_optimize character NULL 优化后的CpG甲基化文件的目录的路径。
+#' @param promotermethy_optimize character NULL 优化后的启动子甲基化文件的目录的路径。
+#' @param promotermethy_dir character NULL 存储启动子甲基化文件的目录的路径。
+#' @param methyratio_py character NULL 用于计算methyratio的Python脚本的路径。
+#' @param gene_fa character NULL 基因组序列的FASTA文件的路径。
+#' @param bedtools_exe character NULL BEDTools可执行文件的路径。
+#' @param cpg_bedfiles character NULL CpG岛的bed文件的路径。
+#' @param promoter_bedfiles character NULL 启动子区域的bed文件的路径。
+#' @param type character "promoter" 甲基化分析的类型（"cpg"或"promoter"）。
+#' @param matrix_type character "Beta-value" 矩阵表示的类型（"Beta-value"或"M-value"）。
+#' @param chrsex character "dame" 染色体性别（"dame"或"male"）。 
+#' @return R6对象的实例。
+    initialize = function(root_dir = NA, methyratio_dir = NA, 
+                          cpgmethy_dir = NA, cpgmethy_optimize = NA,
+                          promotermethy_optimize = NA, promotermethy_dir = NA, methyratio_py = "methratio.py",
+                          gene_fa = "Genedata/hg19.fa", bedtools_exe = "bedtools", 
+                          cpg_bedfiles ="Genedata/cpg_islands_hg19.bedgraph",
+                          promoter_bedfiles = "Genedata/promoter_hg19_ensGene.bedgraph", type = "cpg", 
+                          matrix_type = "Beta-value", chrsex = "dame") {
+    self$root_dir <- root_dir
+    self$methyratio_dir <- glue::glue("{root_dir}/bed_files")
+    self$cpgmethy_dir <- glue::glue("{root_dir}/cpg_methy")
+    self$cpgmethy_optimize <- glue::glue("{root_dir}/cpg_methy_optimize")
+    self$promotermethy_optimize <- glue::glue("{root_dir}/promoter_methy_optimize")
+    self$promotermethy_dir <- glue::glue("{root_dir}/promoter_methy")
+    self$methyratio_py <- methyratio_py
+    self$gene_fa <- gene_fa
+    self$bedtools_exe <- bedtools_exe
+    self$cpg_bedfiles <- cpg_bedfiles
+    self$promoter_bedfiles <- promoter_bedfiles
+    self$type <- type
+    self$matrix_type <- matrix_type
+    self$chrsex <- chrsex
+    self$info()
+  },
+#' @method info
+#' 打印R6对象的信息
+#' 
+#' @return str
+  info = function() {
+    message("SamwiseClass:It's the job that's never started takes longest to finish.this is an R6 object for rrbs upstream workflow")
+  },
+#' @method initialize_dirs
+#' 初始化R6对象的目录
+#' 
+#' @return NULL
 
-That's it ! This the end of the documented story of our package. All components are there.
+initialize_dirs = function() {
+    print(paste("info:: Step 1,creat dirs for further use, as the following workflow after BSMSP-based procedure"))
+    fs::dir_create(self$methyratio_dir)
+    fs::dir_create(self$cpgmethy_dir)
+    fs::dir_create(self$cpgmethy_optimize)
+  }, 
+#' @method bam2methyratio
+#' 从BAM文件中计算methyratio值
+#'
+#' @return methyratio
+bam2methyratio = function() {
+    print(paste("info:: Step 2, Get methyratio values from bam files and transfer to bedgraph files"))
+    bamfiles <- list.files(self$root_dir, pattern = "\\.bam$", recursive = FALSE)
+    fs::dir_create(self$methyratio_dir)
+    fs::dir_create(paste0(self$root_dir, "/temp"))
+    fs::dir_create(paste0(self$root_dir, "/processed"))
+    for (i in 1:length(bamfiles)) {
+      print(paste("info::", paste0(i, "/", length(bamfiles)), ",start processing methyratio values", bamfiles[i]))
+      output_dir_txt <- paste0(self$root_dir, "/temp/", "methyratio_", stringr::str_replace(bamfiles[i], ".bam",
+        ".txt"))
+      output_dir_bed <- paste0(self$methyratio_dir, "/", "methyratio_", stringr::str_replace(bamfiles[i], ".bam",
+        ".bedgraph"))
+      # python3 /home/rstudio/methy2expr/dev/BSMAPz-master/methratio.py -o test.txt
+      #-d /home/rstudio/methy2expr/dev/hg19/hg19.fa 23T035358.bam
+      system(paste("python2", self$methyratio_py, "-I -o", output_dir_txt, "-d", self$gene_fa, paste0(self$root_dir,
+        "/", bamfiles[i])))
+      print(paste("info::", paste0(i, "/", length(bamfiles)), ",start packing bedgraph files", bamfiles[i]))
+      # 禁用科学计数法
+      options(scipen = 9999)
+      temp_df <- data.table::fread(output_dir_txt, header = TRUE, stringsAsFactors = FALSE) %>%
+        dplyr::select(chr, pos, ratio) %>%
+        dplyr::mutate(start = as.character(as.numeric(pos) - 1)) %>%
+        dplyr::rename(end = pos) %>%
+        dplyr::select(chr, start, end, ratio)
+      data.table::fwrite(temp_df, file = output_dir_bed, sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+      print(paste("info::", paste0(i, "/", length(bamfiles)), ",start clean files in temp dirs with txt and bam"))
+      fs::file_delete(output_dir_txt)
+      fs::file_delete(paste0(self$root_dir, "/", bamfiles[i]))
+      fs::file_move(paste0(self$root_dir, "/", stringr::str_replace(bamfiles[i], ".bam", ".tmpSrt.bam")), paste0(self$root_dir,
+        "/processed/", stringr::str_replace(bamfiles[i], ".bam", ".tmpSrt.bam")))
+      fs::file_move(paste0(self$root_dir, "/", stringr::str_replace(bamfiles[i], ".bam", ".tmpSrt.bam.bai")), paste0(self$root_dir,
+        "/processed/", stringr::str_replace(bamfiles[i], ".bam", ".tmpSrt.bam.bai")))
+      gc()
+    }
+  }, 
+#' @method map2cpg4optimize
+#' 将bedgraph文件映射到CpG岛或启动子区域并优化它们。
+#'
+#' @return 优化后的bedgraph文件。
+  map2cpg4optimize = function() {
+    print(paste("info:: Step 3, Get CpGs or promoter regions and optimize the bedgraph files"))
+    rrbs_map2cpgislands <- function(bedtools_exe, root_dir, type = c("cpg", "promoter"), cpg_bedfiles, output) {
+      bedfiles <- list.files(root_dir, ".bedgraph", recursive = TRUE)
+      fs::dir_create(output)
+      for (i in 1:length(bedfiles)) {
+        print(paste(i, "/", length(bedfiles), ",we are now working on ", bedfiles[i]))
+        # bedtools intersect -a methylation.bedgraph -b annotation.gtf -wa -wb > annotated_methylation.bed
+        system(paste(bedtools_exe, "intersect -a", paste0(root_dir, "/", bedfiles[i]), "-b", cpg_bedfiles, "-wa -wb >",
+          paste0(output, "/", stringr::str_replace(bedfiles[i], ".bedgraph", paste0("_", type, ".bedgraph")))))
+      }
+      gc()
+    }
+    # 优化跟cpg岛匹配后的bedgraph文件的序列和甲基化信号值
+    rrbs_optimize4cpgislands <- function(root_dir, output) {
+      bedfiles <- list.files(root_dir, ".bedgraph")
+      fs::dir_create(output)
+      for (i in 1:length(bedfiles)) {
+        bedfile <- data.table::fread(paste0(root_dir, "/", bedfiles[i]))
+        print(paste(paste0(i, "/", length(bedfiles)), ", now we are working on", bedfiles[i]))
+        colnames(bedfile) <- c("chr_num", "start_chrn", "end_chrn", "methy_value", "chr", "start", "end", "CpGs")
+        cpg_seq <- bedfile %>%
+          dplyr::select(chr, start, end, CpGs) %>%
+          dplyr::mutate(chr_cpgs = paste0(chr, "_", CpGs)) %>%
+          dplyr::distinct(chr_cpgs, .keep_all = TRUE) %>%
+          dplyr::select(start, end, chr_cpgs)
+        bedfile2 <- bedfile %>%
+          dplyr::group_by(CpGs, chr) %>%
+          dplyr::summarise(methy_value = mean(methy_value)) %>%
+          dplyr::mutate(chr_cpgs = paste0(chr, "_", CpGs)) %>%
+          dplyr::left_join(cpg_seq, by = "chr_cpgs") %>%
+          dplyr::select(chr, start, end, methy_value, CpGs) %>%
+          dplyr::arrange(chr)
+        data.table::fwrite(bedfile2, paste0(output, "/", bedfiles[i]), quote = FALSE)
+      }
+    }
+    rrbs_optimize4promoter <- function(root_dir, output) {
+      print(paste("info:: be careful, we will use at least 20GB RAM."))
+      library(stringr)
+      bedfiles <- list.files(root_dir, ".bedgraph")
+      fs::dir_create(output)
+      for (i in 1:length(bedfiles)) {
+        bedfile <- data.table::fread(paste0(root_dir, "/", bedfiles[i]))
+        print(paste(paste0(i, "/", length(bedfiles)), ", now we are working on", bedfiles[i]))
+        colnames(bedfile) <- c("chr_num", "start_chrn", "end_chrn", "methy_value", "chr", "start", "end", "promoter",
+          "unknow", "strand")
+        bedfile <- bedfile %>%
+          dplyr::mutate(promoter = str_split(promoter, "_")) %>%
+          dplyr::mutate(promoter = sapply(promoter, `[`, 1))
+        cpg_seq <- bedfile %>%
+          dplyr::select(chr, start, end, promoter, strand) %>%
+          dplyr::mutate(chr_cpgs = paste0(chr, "_", promoter, strand)) %>%
+          dplyr::distinct(chr_cpgs, .keep_all = TRUE) %>%
+          dplyr::select(chr, start, end, chr_cpgs)
+        bedfile2 <- bedfile %>%
+          dplyr::mutate(chr_cpgs = paste0(chr, "_", promoter, strand)) %>%
+          dplyr::group_by(chr_cpgs) %>%
+          dplyr::summarise(methy_value = mean(methy_value)) %>%
+          dplyr::left_join(cpg_seq, by = "chr_cpgs") %>%
+          dplyr::select(chr, start, end, methy_value, chr_cpgs) %>%
+          dplyr::rename(promoter = chr_cpgs) %>%
+          dplyr::arrange(chr)
+        data.table::fwrite(bedfile2, paste0(output, "/", bedfiles[i]), quote = FALSE)
+        gc()
+      }
+    }
+    message(glue::glue("now we are on {self$type} mod."))
+    if (self$type == "cpg") {
+      rrbs_map2cpgislands(self$bedtools_exe, self$methyratio_dir, self$type, self$cpg_bedfiles, self$cpgmethy_dir)
+      rrbs_optimize4cpgislands(self$cpgmethy_dir, self$cpgmethy_optimize)
+      fs::dir_delete(self$cpgmethy_dir)
+    } else {
+      rrbs_map2cpgislands(self$bedtools_exe, self$methyratio_dir, self$type, self$promoter_bedfiles, self$promotermethy_dir)
+      rrbs_optimize4promoter(self$promotermethy_dir, self$promotermethy_optimize)
+      fs::dir_delete(self$promotermethy_dir)
+    }
+  }, 
+#' @method pack2matrix
+#' 将bedgraph文件打包为矩阵格式。
+#'
+#' @return 矩阵格式的数据框。
+  pack2matrix = function() {
 
-<!-- 
-# Inflate your package
+    rrbs_cpgBED2matrix <- function(root_dir, matrix_type = c("Beta-value", "M-value"), chrsex = "dame") {
+      bedfiles <- list.files(root_dir, "\\.bedgraph", recursive = FALSE)
+      union_cpgs <- list()
+      for (i in 1:length(bedfiles)) {
+        if (chrsex == "dame") {
+          df_temp <- data.table::fread(paste0(root_dir, "/", bedfiles[i])) %>%
+          dplyr::filter(chr != "chrX") %>%
+          dplyr::filter(chr != "chrY") %>%
+          dplyr::mutate(idx = paste0(chr, "~", start, "~", end, "~", CpGs))
+          union_cpgs[[i]] <- df_temp$idx
+        } else {
+          df_temp <- data.table::fread(paste0(root_dir, "/", bedfiles[i])) %>%
+          dplyr::mutate(idx = paste0(chr, "~", start, "~", end, "~", CpGs))
+          union_cpgs[[i]] <- df_temp$idx
+        }
+      }
+      union_cpg <- Reduce(intersect, union_cpgs)
+      # 读取第一个bedgraph文件
+      df_table <- data.table::fread(paste0(root_dir, "/", bedfiles[1])) %>%
+        dplyr::filter(chr != "chrX") %>%
+        dplyr::filter(chr != "chrY") %>%
+        dplyr::mutate(idx = paste0(chr, "~", start, "~", end, "~", CpGs)) %>%
+        dplyr::filter(idx %in% union_cpg) %>%
+        dplyr::select(-CpGs)
+      sample_id <- stringr::str_split(bedfiles[1], "_")[[1]][2]
+      colnames(df_table) <- c("chr", "start", "end", sample_id, "idx")
+      # 遍历剩余的bedgraph文件，并逐个进行合并
+      for (i in 2:length(bedfiles)) {
+        print(paste("working on item", i, "/", length(bedfiles)))
+        temp_df <- data.table::fread(paste0(root_dir, "/", bedfiles[i])) %>%
+          dplyr::filter(chr != "chrX") %>%
+          dplyr::filter(chr != "chrY") %>%
+          dplyr::mutate(idx = paste0(chr, "~", start, "~", end, "~", CpGs)) %>%
+          dplyr::filter(idx %in% union_cpg) %>%
+          dplyr::select(-all_of(c("chr", "start", "end", "CpGs")))
+        sample_id <- stringr::str_split(bedfiles[i], "_")[[1]][2]
+        colnames(temp_df) <- c(sample_id, "idx")
+        df_table <- dplyr::left_join(df_table, temp_df, by = "idx")
+      }
 
-You're one inflate from paper to box.
-Build your package from this very Rmd using `fusen::inflate()` 
--->
+      df_table_idx <- df_table %>%
+        dplyr::select(chr, start, end, idx)
+      # 将df_table_idx写入文件
+      data.table::fwrite(df_table_idx, "df_cpg_idx.txt", sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+      # 重新整理df_table，移动idx列至最前面
+      df_table <- df_table %>%
+        dplyr::select(-all_of(c("chr", "start", "end"))) %>%
+        dplyr::relocate(idx)
+      # 根据matrix_type选择处理方式
+      if (matrix_type == "M-value") {
+        # 计算M-value
+        matrixdf <- as.matrix(df_table[, -1])
+        result <- log2(matrixdf/(1 - matrixdf))
+        df <- as.data.frame(result) %>%
+          dplyr::mutate(idx = df_table$idx) %>%
+          dplyr::relocate(idx)
+        colnames(df) <- colnames(df_table)
+      } else {
+        df <- df_table
+      }
+      # 将df保存为RDS文件
+      saveRDS(df, "methylationSet_cpgs.RDS")
+      return(df)
+    }
+    rrbs_promoterBED2matrix <- function(root_dir, matrix_type = c("Beta-value", "M-value"), chrsex = "dame") {
+      bedfiles <- list.files(root_dir, "\\.bedgraph", recursive = FALSE)
+      union_cpgs <- list()
+      for (i in 1:length(bedfiles)) {
+        if (chrsex == "dame") {
+          df_temp <- data.table::fread(paste0(root_dir, "/", bedfiles[i])) %>%
+          dplyr::filter(chr != "chrX") %>%
+          dplyr::filter(chr != "chrY")
+          dplyr::union_cpgs[[i]] <- df_temp$promoter
+        } else {
+          df_temp <- data.table::fread(paste0(root_dir, "/", bedfiles[i]))
+          union_cpgs[[i]] <- df_temp$promoter
+        }
+      }
+      union_cpg <- Reduce(intersect, union_cpgs)
+      # 读取第一个bedgraph文件
+      df_table <- data.table::fread(paste0(root_dir, "/", bedfiles[1])) %>%
+        dplyr::filter(chr != "chrX") %>%
+        dplyr::filter(chr != "chrY") %>%
+        dplyr::filter(promoter %in% union_cpg) %>%
+        dplyr::rename(dix = promoter)
+      sample_id <- stringr::str_split(bedfiles[1], "_")[[1]][2]
+      colnames(df_table) <- c("chr", "start", "end", sample_id, "idx")
+      # 遍历剩余的bedgraph文件，并逐个进行合并
+      for (i in 2:length(bedfiles)) {
+        print(paste("working on item", i, "/", length(bedfiles)))
+        temp_df <- data.table::fread(paste0(root_dir, "/", bedfiles[i])) %>%
+          dplyr::filter(chr != "chrX") %>%
+          dplyr::filter(chr != "chrY") %>%
+          dplyr::filter(promoter %in% union_cpg) %>%
+          dplyr::rename(dix = promoter) %>%
+          dplyr::select(-all_of(c("chr", "start", "end")))
+        sample_id <- stringr::str_split(bedfiles[i], "_")[[1]][2]
+        colnames(temp_df) <- c(sample_id, "idx")
+        df_table <- left_join(df_table, temp_df, by = "idx")
+      }
 
+      df_table_idx <- df_table %>%
+        dplyr::select(chr, start, end, idx)
+      # 将df_table_idx写入文件
+      data.table::fwrite(df_table_idx, "df_promoter_idx.txt", sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+      # 重新整理df_table，移动idx列至最前面
+      df_table <- df_table %>%
+        dplyr::select(-all_of(c("chr", "start", "end"))) %>%
+        dplyr::relocate(idx)
+      # 根据matrix_type选择处理方式
+      if (matrix_type == "M-value") {
+        # 计算M-value
+        matrixdf <- as.matrix(df_table[, -1])
+        result <- log2(matrixdf/(1 - matrixdf))
+        df <- as.data.frame(result) %>%
+          dplyr::mutate(idx = df_table$idx) %>%
+          dplyr::relocate(idx)
+        colnames(df) <- colnames(df_table)
+      } else {
+        df <- df_table
+      }
+      # 将df保存为RDS文件
+      saveRDS(df, "methylationSet_promoter.RDS")
+      return(df)
+    }
+    print(paste("info:: Step 4, Get methylation matrix among samples && calculate M-value in option"))
+    if (self$type == "cpg") {
+      df <- rrbs_cpgBED2matrix(self$cpgmethy_optimize, self$matrix_type, self$chrsex)
+    } else {
+      df <- rrbs_promoterBED2matrix(self$promotermethy_optimize, self$matrix_type, self$chrsex)
+    }
+    print(paste("info:: congratuations! You have successfully build a methylation matrix.You can find the methylation matrix in RDS format in ",
+      getwd(), "/methylationSet.RDS"))
+    return(df)
+  }))
+```
+  
+```{r example-samwiseclass}
+object2 <- SamwiseClass$new(root_dir = "batch1117", type = "cpg")
+```
+  
+```{r tests-samwiseclass}
+test_that("samwiseclass works", {
+  expect_true(inherits(SamwiseClass, "R6ClassGenerator")) 
+})
+```
+  
 
 ```{r development-inflate, eval=FALSE}
 # Execute in the console directly

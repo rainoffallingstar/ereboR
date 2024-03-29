@@ -1,2 +1,5 @@
 ^dev$
 ^LICENSE\.md$
+^erebor\.Rproj$
+^\.Rproj\.user$
+^README\.Rmd$
