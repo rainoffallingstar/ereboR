@@ -1,13 +1,10 @@
-
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 # erebor
 
-<img src="https://gitee.com/rainoffallingstar/rainoffallingstar/blob/mydraft/_imgbed/erebor.png" height="200" align="right"/>
-<!-- badges: start --> <!-- badges: end -->
+<img src="https://gitee.com/rainoffallingstar/rainoffallingstar/blob/mydraft/_imgbed/erebor.png" height="200" align="right"/> <!-- badges: start --> <!-- badges: end -->
 
-The goal of erebor is to build a R6-based package for bulk RNAseq and
-RRBS analysis.
+The goal of erebor is to build a R6-based package for bulk RNAseq and RRBS analysis.
 
 ## Installation
 
