@@ -3,12 +3,16 @@ flat_first.Rmd:
   state: active
   R:
   - R/bagginsclass.R
+  - R/entclass.R
+  - R/exprentclass.R
   - R/moriaclass.R
   - R/samwiseclass.R
   tests:
   - tests/testthat/test-bagginsclass.R
   - tests/testthat/test-samwiseclass.R
   - tests/testthat/test-moriaclass.R
+  - tests/testthat/test-entclass.R
+  - tests/testthat/test-exprentclass.R
   vignettes: vignettes/get-started.Rmd
   inflate:
     flat_file: dev/flat_first.Rmd

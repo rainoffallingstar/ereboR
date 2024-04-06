@@ -2,6 +2,8 @@
 
 export("%>%")
 export(BagginsClass)
+export(EntClass)
+export(ExprEntClass)
 export(MoriaClass)
 export(SamwiseClass)
 importFrom(magrittr,"%>%")

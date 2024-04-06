@@ -10,17 +10,27 @@ License: MIT + file LICENSE
 Depends: 
     R (>= 2.10)
 Imports: 
+    AnnoProbe,
+    biomaRt,
+    clusterProfiler,
     data.table,
     dplyr,
     fs,
     GEOquery,
+    ggplotify,
     glue,
+    GSVA,
+    limma,
     magrittr,
+    org.Hs.eg.db,
+    pheatmap,
     R6,
     readr,
+    Rtsne,
     stringr,
     SummarizedExperiment,
-    TCGAbiolinks
+    TCGAbiolinks,
+    tidyr
 Suggests: 
     knitr,
     rmarkdown,
