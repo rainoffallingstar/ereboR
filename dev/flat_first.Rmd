@@ -1161,7 +1161,255 @@ test_that("ExprEntClass works", {
 ```
 
 # MethylEntClass : The world is changing. I feel it in the water. I feel it in the earth. I smell it in the air. Much that once was is now lost, for none now live who remember it.
-
+# MethylEntClass
+    
+```{r function-MethylEntClass}
+#' MethylEntClass
+#' 
+#' MethylEntClass : The world is changing. I feel it in the water. I feel it in the earth. I smell it in the air. Much that once was is now lost, for none now live who remember it.
+#' 
+#' @return
+#' 
+#' @export
+MethylEntClass <- R6::R6Class(
+  "MethySet",
+  inherit = MatrixSet,
+  public = list(
+    DMP_table <- NA,
+    initialize <- function(DMP_table = NA){
+      self$DMP_table <- self$DifferentAnalysis_workfolw(adjust.method = "BH",adjPVal = 0.05)
+    },
+    
+    removeBatch = function( variablename = "group",
+                            batchname="batch",
+                            logitTrans=TRUE){
+      print("this function is adopted from chAMP.")
+      beta <- self$array
+      pd <- self$pdata
+      if(length(which(is.na(beta)))>0) message(length(which(is.na(beta)))," NA are detected in your beta Data Set, which may cause fail or uncorrect of runCombat analysis.")
+      if ("data.frame" %in% class(beta)){
+        print("we repuire a methylationSet in the format of data.frame as input")
+      }
+      if ("data.frame" %in% class(pd)){
+        print("we repuire a pd in the format of data.frame as input")
+      }
+      if(is.null(variablename) | !variablename %in% colnames(pd)) stop("variablename parameter MUST contains variable in pd file.")
+      valid.idx <- which(!colnames(pd) == variablename & apply(pd,2,function(x) length(unique(x)))!=1)
+      if(length(valid.idx)==0) stop("There is no valid factor can be corrected. Factor can be corrected must contian at least two phenotypes. Also batch factors can be variable factor. Please check if your covariates fulfill these requirement.")
+      PhenoTypes.lv_tmp <- pd[,valid.idx]
+      PhenoTypes.lv_tmp <- apply(PhenoTypes.lv_tmp,2,function(x) as.character(x))
+      PhenoTypes.lv <- as.data.frame(apply(PhenoTypes.lv_tmp,2,function(x) if(class(x)!="numeric") as.factor(as.numeric(as.factor(x)))))
+      if(!is.null(rownames(pd))) rownames(PhenoTypes.lv) <- rownames(pd)
+      if(ncol(PhenoTypes.lv)>=1){
+        message("<< Following Factors in your pd(sample_sheet.csv) could be applied to Combat: >>")
+        sapply(colnames(PhenoTypes.lv_tmp),function(x) message("<",x,">(",class(PhenoTypes.lv[[x]]),")"))
+        message("[Combat have automatically select ALL factors contain at least two different values from your pd(sample_sheet.csv).]")
+      }else{
+        stop("You don't have even one factor with at least two value to be analysis. Maybe your factors contains only one value, no variation at all...")
+      }
+      if(ncol(pd) > ncol(PhenoTypes.lv)){
+        message("\n<< Following Factors in your pd(sample_sheet.csv) can not be corrected: >>")
+        sapply(setdiff(colnames(pd),colnames(PhenoTypes.lv)),function(x) message("<",x,">"))
+        message("[Factors are ignored because they are conflict with variablename, or they contain ONLY ONE value across all Samples, or some phenotype contains less than 2 Samples.]")
+      }
+      if(all(batchname %in% colnames(PhenoTypes.lv))){
+        message("As your assigned in batchname parameter: ",paste(batchname,collapse=",")," will be corrected by Combat function.")
+      }else{
+        stop(setdiff(batchname,colnames(PhenoTypes.lv))," factors is not valid to run Combat, please recheck your dataset.")
+      }
+      beta_2 <- beta
+      beta_rownames <- beta[,1]
+      beta <- beta[,-1] 
+      rownames(beta) <- beta_rownames
+      if(min(beta)<=0 & logitTrans == TRUE){
+        message("Zeros in your dataset have been replaced with smallest positive value.")
+        beta[beta<=0] <- min(beta[beta > 0])
+      }
+      #Following four find empirical hyper-prior values
+      aprior <- function(gamma.hat) {
+        m <- mean(gamma.hat)
+        s2 <- var(gamma.hat)
+        (2*s2 + m^2) / s2
+      }
+      bprior <- function(gamma.hat){
+        m <- mean(gamma.hat)
+        s2 <- var(gamma.hat)
+        (m*s2 + m^3) / s2
+      }
+      innercombat <- function(beta,beta_2,batch_temp,formdf,pd,logitTrans){
+        library(minfi)
+        if(logitTrans){
+          beta <- logit2(beta)
+        } 
+        #print(beta)
+        mod <- model.matrix(formdf,data=pd)
+        print(mod)
+        message("Generate mod success. Started to run ComBat, which is quite slow...")
+        combat <- sva::ComBat(dat=beta,batch=batch_temp,mod=mod)
+        print("checked")
+        if(logitTrans){
+          combat=ilogit2(combat)
+        }
+        if (is.na(combat[1,1])){
+          print("found na,try another")
+          combat <- sva::ComBat(dat = beta_2[,-1],batch=batch_temp,mod = mod)
+        }
+        return(combat)
+      }
+      library(sva)
+      #i = 1
+      for(i in 1:length(batchname)){
+        message("\n<< Start Correcting ",batchname[i]," >>")
+        if(i+1 <= length(batchname)){
+          formdf <- as.formula(paste(" ~ ",paste(c(variablename,batchname[(i+1):length(batchname)]),collapse=" + "),sep=""))
+        }else{
+          formdf <- as.formula(paste(" ~",variablename))
+        }
+        batch_temp <- pd[,batchname[i]] %>% unlist()
+        beta <- innercombat(beta,beta_2,batch_temp,formdf,pd = pd,logitTrans = logitTrans)
+      }
+      beta <- as.data.frame(beta)
+      beta <- beta %>% mutate(idx = beta_rownames) %>% relocate(idx)
+      if(is.null(beta)){
+        message("Sorry, Combat process run failed. Your old dataset will be returned.")
+        return(beta_2) 
+      }else{
+        message("Combat process run success. Corrected dataset will be returned.")
+        return(beta)
+      }
+      message("[<<< COMBAT END >>>]")
+    },
+    Plot_hetmap = function(p_thred = 0.05,logFC_thred = 1 ,topn = 30){
+      library(pheatmap)
+      group_sample <- self$pdata %>% dplyr::arrange(.[[self$group_index]])
+      group_order <- group_sample[[self$sample_index]]
+      expr_normal_df2 <- self$array %>% 
+        dplyr::select(all_of(group_order))
+      rownames(expr_normal_df2) <- self$array[,1]
+      group_list <- factor(group_sample[[self$group_index]])
+      deg <- self$DEG_table %>% 
+        dplyr::mutate(change = ifelse(adj.P.Val < p_thred & abs(logFC) > logFC_thred,
+                                      ifelse(logFC > logFC_thred ,'UP','DOWN'),'NOT')) %>% 
+        dplyr::filter(change != "NOT") %>% 
+        dplyr::arrange('adj.P.Val')
+      display_gene = rownames(deg)
+      cg=c(names(head(sort(display_gene),topn)),names(tail(sort(display_gene),topn)))
+      n=t(scale(t(expr_normal_df2[cg,])))
+      n[n>2]=2
+      n[n< -2]= -2
+      n[1:4,1:4]
+      ac=data.frame(group_list=group_list)
+      rownames(ac)=colnames(n)
+      p <- pheatmap(n,show_colnames =F,show_rownames = T,annotation_col=ac)
+      library(ggplotify)
+      as.ggplot(p) + theme(plot.margin = margin(l = 5, r = 10))
+    },
+    Plot_vocalno = function(style_id,logFC_thred){
+      need_deg=data.frame(symbols=rownames(self$DMP_table), logFC=self$DMP_table[["logFC"]], p=self$DMP_table[["adj.P.Val"]])
+      AnnoProbe::deg_volcano(need_deg,style_id,logFC_thred = logFC_thred)
+    },
+    probel_annotate = function(type = "cpg",cpg_bedgraph){
+      
+      rrbs_annote4DMP <- function(DMP_df,type = "cpg",
+                                  cpg_bedgraph){
+        unannote_list <- rownames(DMP_df)
+        if (type == "promoter"){
+          idx_temp <- idx$idx1
+          for (i in 1:length(idx_temp)) {
+            temp <- stringr::str_split(idx_temp[i],"_")[[1]][2]
+            idx_temp[i] <- stringr::str_sub(temp,1,nchar(temp)-1)
+          }
+          idx <- idx %>% mutate(label = idx_temp)
+        } else {
+          g_id <- data.table::fread(cpg_bedgraph) 
+          for (i in 1:nrow(g_id)){
+            if (is.na(g_id$symbol[i]) | is.null(g_id$symbol[i])){
+              g_id$symbol[i] <- g_id$idx[i]
+            }else {
+              next
+            }
+          }
+          g_id <- g_id %>% 
+            dplyr::select(-gene_id) %>%
+            filter(idx %in% unannote_list)
+        }
+        DMP_df_colnames <- c(colnames(g_id),colnames(DMP_df))
+        row_df <- rownames(DMP_df)
+        DMP_df <- DMP_df %>%  
+          mutate(idx = row_df) %>% 
+          filter(idx %in% g_id$idx) %>% 
+          left_join(g_id,by = "idx") %>% 
+          dplyr::select(all_of(c("idx",DMP_df_colnames) ))
+        return(DMP_df)
+      }
+      df <- rrbs_annote4DMP(self$DMP_table,type,cpg_bedgraph)
+      return(df)
+    },
+    gene_enrich = function(changeType,pathwaydb,genedb){
+      enrichment_in_action <- function(df,types){
+        if (types == "go"){
+          result <- clusterProfiler::enrichGO(df, 'org.Hs.eg.db', ont="BP", pvalueCutoff=0.01)
+        } else {
+          result <- clusterProfiler::enrichKEGG(df, organism = "hsa",
+                                                keyType = "kegg",
+                                                pvalueCutoff = 0.01,
+                                                pAdjustMethod = "BH",
+                                                minGSSize = 10,
+                                                maxGSSize = 500,
+                                                qvalueCutoff = 0.2,
+                                                use_internal_data = FALSE)
+        }
+      }
+      gene2entrez <- function(genelist,db){
+        # need further tidy evaluation
+        db %>% 
+          dplyr::filter(SYMBOL %in% genelist) %>% 
+          dplyr::select(ENTREZID) %>% 
+          as.vector() %>% 
+          unlist()
+      }
+      DEG <- self$DEG_table %>% 
+        dplyr::mutate(change = ifelse(adj.P.Val < p_thred & abs(logFC) > logFC_thred,
+                                      ifelse(logFC > logFC_thred ,'UP','DOWN'),'NOT')) %>% 
+        dplyr::filter(change == changeType) %>% 
+        dplyr::rownames() %>%
+        dplyr::gene2entrez(genedb) %>% 
+        as.vector() %>% unique() %>% 
+        enrichment_in_action(types = pathwaydb)
+      Go_result <- DEG@result %>% 
+        tidyr::separate(col=GeneRatio,into = c("GR1", "GR2"), sep = "/") %>% 
+        tidyr::separate(col=BgRatio, into = c("BR1", "BR2"), sep = "/") %>% 
+        dplyr::mutate(enrichment_factor = (as.numeric(GR1)/as.numeric(GR2))/(as.numeric(BR1)/as.numeric(BR2))) %>% 
+        dplyr::mutate(generatio = (as.numeric(GR1)/as.numeric(GR2))) %>% 
+        dplyr::arrange(-enrichment_factor)
+      return(Go_result)
+      
+    },
+    #dashboard = function(){}
+    Mvalue_transform = function(normalize = FALSE){
+      matrixdf <- self$array[,-1] %>% as.matrix()
+      result <- matrixdf / (1 - matrixdf)
+      if (normalize){
+        result <- log2(result)
+      }
+      df <- as.data.frame(result) %>% mutate(idx = self$probel) %>% relocate(idx)
+      return(df)
+    }
+    
+  )
+)
+```
+  
+```{r example-MethylEntClass}
+MethylEnt <- MethylEntClass$new()
+```
+  
+```{r tests-MethylEntClass}
+test_that("MethylEntClass works", {
+  expect_true(inherits(MethylEntClass, "R6ClassGenerator")) 
+})
+```
+  
 
 
 ```{r development-inflate, eval=FALSE}
