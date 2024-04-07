@@ -22,6 +22,7 @@ Imports:
     GSVA,
     limma,
     magrittr,
+    minfi,
     org.Hs.eg.db,
     pheatmap,
     R6,
@@ -29,6 +30,7 @@ Imports:
     Rtsne,
     stringr,
     SummarizedExperiment,
+    sva,
     TCGAbiolinks,
     tidyr
 Suggests: 

@@ -6,6 +6,8 @@
 #' this is an R6 object for general array/matrix
 #' 
 #' @field array data.frame data.frame of expression/methylation matrix data, first column is the probel id
+#' @field array_bk data.frame the back up the old data.frame of expression/methylation matrix data, first column is the
+#' probel id
 #' @field pdata data.frame data.frame of the clinical data of the related matrix data
 #' @field probel vector the probel of the matrix
 #' @field group_index char the colname of the group infomation in pdata
@@ -13,8 +15,9 @@
 #' @field barcode char the colname of the barcode infomation in pdata
 #' @field pca data.frame the PCA analysis result
 #' @field tsne data.frame the T-SNE analysis result
-#' @field normal_array data.frame the normalized array
+#' @field removebatch_array data.frame the array with batch effects removed
 #' @field DA_result data.frame the differential analysis result
+#' @field projectType expr or methy
 #' @return R6 object
 #' 
 #' @export
@@ -25,6 +28,7 @@ EntClass <- R6::R6Class(
   lock_objects = FALSE,
   public = list(
     array = NA,
+    array_bk = NA,
     pdata = NA,
     probel = NA,
     group_index = NA,
@@ -32,16 +36,25 @@ EntClass <- R6::R6Class(
     barcode = NA,
     pca = NA,
     tsne = NA,
-    normal_array = NA,
+    removebatch_array = NA,
     DA_result = NA,
+    projectType = NA,
 #' @param array data.frame data.frame of expression/methylation matrix data, first column is the probel id
 #' @param pdata data.frame data.frame of the clinical data of the related matrix data
 #' @param group_index char the colname of the group infomation in pdata
 #' @param batch_index char the colname of the batch_index infomation in pdata
 #' @param barcode_index char the colname of the barcode infomation in pdata
+#' @param normalized logit auto normalized when true
+#' @param remove_batch logit auto remove batch effect when true
+#' @param differential logit auto differential analysis when true
+#' @param projectType expr or methy
     initialize = function(array = NULL,pdata = NULL,
-                          group_index = "group",batch_index = "batch",barcode_index = "sampleid"
+                          group_index = "group",batch_index = "batch",
+                          barcode_index = "sampleid",normalized = FALSE,
+                          remove_batch = FALSE,differential = FALSE,
+                          projectType = c("expr","methy")
                           ){
+      self$projectType <- projectType
       if (is.null(array)){
       self$array <- NULL
       self$pdata <- NULL
@@ -54,10 +67,15 @@ EntClass <- R6::R6Class(
       self$group_index <- group_index
       self$batch_index <- batch_index
       self$barcode <- barcode_index
-      self$pca <- NULL
-      self$tsne <- NULL
-      self$normal_array <- NULL
-      self$DA_result <- NULL
+      if(normalized){
+        self$normalization_transform()
+      }
+      if (remove_batch){
+        self$removeBatch()
+      }
+      if (differential){
+        self$DifferentAnalysis_workflow()
+      }
       self$info()
     },
     #' @method info
@@ -66,6 +84,231 @@ EntClass <- R6::R6Class(
     #' @return str
     info = function(){
       message("EntClass/MatrixSet: We are not hasty. What we do, we do after long consideration and mostly we do not do anything.this is an R6 object for general array/matrix")
+    },
+    #' @method use_remove batch
+    #' @return data.frame
+    use_removebatch = function(){
+      self$array_bk <- self$array
+      self$array <- self$removebatch_array
+    },
+    #' @method probel annotate
+    #' @param methyltype chr promoter or cpg
+    #' @return data.frame
+    probel_annotate = function(methyltype = c("promoter","cpg")){
+      if (self$projectType == "expr"){ 
+        ensembl2symbol <- function() {
+          library(org.Hs.eg.db)
+          library(biomaRt)
+          # 连接到biomaRt数据库
+          mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
+          # 获取ENSEMBL到symbol的映射
+          ensembl2symbol <- getBM(attributes = c("ensembl_gene_id", "external_gene_name"),
+                                filters = "ensembl_gene_id",
+                                values = ensembl_ids,
+                                mart = mart)
+          # 返回映射结果
+          return(ensembl2symbol)
+        }
+        rnaseq_annote4matrix <- function(mds_expr_matrix,duplicate_method = "avg"){
+          prfix <- rep(NA,nrow(mds_expr_matrix))
+          for (i in 1:nrow(mds_expr_matrix)){
+            prfix[i] <- stringr::str_sub(mds_expr_matrix$GENEID[i],1,4)
+            }
+          g_id <- mds_expr_matrix %>% 
+            mutate(prefix = prfix) %>% 
+            filter(prefix == "ENSG")
+          g_id2 <- g_id$GENEID
+          ff <- ensembl2symbol(g_id2)
+          colnames(ff) <- c("GENEID","symbol")
+          g_id <- g_id %>% 
+            dplyr::select(-prefix) %>% 
+            left_join(ff,by = "GENEID")
+          for (i in 1:nrow(g_id)){
+            if (is.na(g_id$symbol[i]) | is.null(g_id$symbol[i])){
+              next
+              }else {
+                g_id$GENEID[i] <- g_id$symbol[i]  
+              }
+            }
+          g_id <- g_id %>% 
+            dplyr::select(-symbol) 
+          if (duplicate_method == "avg"){
+            g_id2 <- aggregate(.~GENEID,mean,data=g_id)
+            }else {
+              g_id2 <- aggregate(.~GENEID,max,data=g_id)
+              }
+          g_id2 <- g_id2 %>% filter(!is.null(GENEID)) %>% filter(!is.na(GENEID)) %>% filter(GENEID != "")
+          rownames(g_id2) <- g_id2$GENEID
+          return(g_id2)
+          }
+
+        self$array <- rnaseq_annote4matrix(mds_expr_matrix = self$array,duplicate_method = "avg")
+        if(!is.na(self$removebatch_array)){
+          self$removebatch_array <- rnaseq_annote4matrix(mds_expr_matrix = self$removebatch_array ,
+                                                         duplicate_method = "avg")
+        }
+        self$probel <- self$array[1,]
+      } else {
+        rrbs_annote4DMP <- function(DMP_df,type = "cpg",
+                            cpg_bedgraph){
+          unannote_list <- data.frame(idx = DMP_df)
+          if (type == "promoter"){
+            g_id <- cpg_bedgraph
+            g_id <- g_id %>%
+                dplyr::select(-gene_id) %>%
+                filter(idx %in% unannote_list$idx)
+            } else {
+              g_id <- cpg_bedgraph
+              for (i in 1:nrow(g_id)){
+                if (is.na(g_id$symbol[i]) | is.null(g_id$symbol[i])){
+                  g_id$symbol[i] <- g_id$idx[i]
+                  }else {
+                    next
+                  }
+                }
+              g_id <- g_id %>%
+                dplyr::select(-gene_id) %>%
+                filter(idx %in% unannote_list$idx)
+            }
+          return(g_id)
+        }
+        
+        if (methyltype == "cpg"){
+          referdata <- cpg_probe
+        } else {
+          referdata <- promoter_probe
+        }
+        
+        self$probel <- rrbs_annote4DMP(self$probel, type = methyltype, cpg_bedgraph = referdata)
+        
+      }
+    },
+
+    #' @method remove Batch
+    #' @return matrix
+    removeBatch = function(){
+      rrbs_ComBat2batcheffects <- function(beta,
+                                     pd,
+                                     variablename = "group",
+                                     batchname="batch",
+                                     logitTrans=TRUE){
+        print("this function is adopted from chAMP.")
+        if(length(which(is.na(beta)))>0) message(length(which(is.na(beta)))," NA are detected in your beta Data Set, which may cause fail or uncorrect of runCombat analysis.")
+        if ("data.frame" %in% class(beta)){print("we repuire a methylationSet in the format of data.frame as input")}
+        if ("data.frame" %in% class(pd)){print("we repuire a pd in the format of data.frame as input")}
+        if(is.null(variablename) | !variablename %in% colnames(pd)) stop("variablename parameter MUST contains variable in pd file.")
+        valid.idx <- which(!colnames(pd) == variablename & apply(pd,2,function(x) length(unique(x)))!=1)
+        if(length(valid.idx)==0) stop("There is no valid factor can be corrected. Factor can be corrected must contian at least two phenotypes. Also batch factors can be variable factor. Please check if your covariates fulfill these requirement.")
+        PhenoTypes.lv_tmp <- pd[,valid.idx]
+        PhenoTypes.lv_tmp <- apply(PhenoTypes.lv_tmp,2,function(x) as.character(x))
+        PhenoTypes.lv <- as.data.frame(apply(PhenoTypes.lv_tmp,2,function(x) if(inherits(x,"numeric"))
+          as.factor(as.numeric(as.factor(x)))))
+        if(!is.null(rownames(pd))) rownames(PhenoTypes.lv) <- rownames(pd)
+        if(ncol(PhenoTypes.lv)>=1){
+          message("<< Following Factors in your pd(sample_sheet.csv) could be applied to Combat: >>")
+          sapply(colnames(PhenoTypes.lv_tmp),function(x) message("<",x,">(",class(PhenoTypes.lv[[x]]),")"))
+          message("[Combat have automatically select ALL factors contain at least two different values from your
+                  pd(sample_sheet.csv).]")
+          }else{
+            stop("You don't have even one factor with at least two value to be analysis. Maybe your factors contains only one value, no variation at all...")
+            }
+        if(ncol(pd) > ncol(PhenoTypes.lv)){
+          message("\n<< Following Factors in your pd(sample_sheet.csv) can not be corrected: >>")
+          sapply(setdiff(colnames(pd),colnames(PhenoTypes.lv)),function(x) message("<",x,">"))
+          message("[Factors are ignored because they are conflict with variablename, or they contain ONLY ONE value
+                  across all Samples, or some phenotype contains less than 2 Samples.]")
+          }
+        if(all(batchname %in% colnames(PhenoTypes.lv))){
+          message("As your assigned in batchname parameter: ",paste(batchname,collapse=",")," will be corrected by
+                  Combat function.")
+          }else{
+            stop(setdiff(batchname,colnames(PhenoTypes.lv))," factors is not valid to run Combat, please recheck your
+                 dataset.")
+            }
+        beta_2 <- beta
+        beta_colnames <- colnames(beta)
+        beta_rownames <- beta[,1]
+        beta <- beta[,-1]
+        if(min(beta)<=0 & logitTrans == TRUE){
+          message("Zeros in your dataset have been replaced with smallest positive value.")
+          beta[beta<=0] <- min(beta[beta > 0])
+          }
+        print(beta)
+        print("check beta in zeros")
+        rownames(beta) <- beta_rownames
+        #Following four find empirical hyper-prior values
+        aprior <- function(gamma.hat) {
+          m <- mean(gamma.hat)
+          s2 <- var(gamma.hat)
+          (2*s2 + m^2) / s2
+        }
+        
+        bprior <- function(gamma.hat){
+            m <- mean(gamma.hat)
+            s2 <- var(gamma.hat)
+            (m*s2 + m^3) / s2
+        }
+        innercombat <- function(beta,beta_2,batch_temp,formdf,pd,logitTrans){
+          library(minfi)
+          if(logitTrans){
+            beta <- logit2(beta)
+            }
+          print(formdf)
+          print(batch_temp)
+          mod <- model.matrix(formdf,data=pd)
+          print(mod)
+          message("Generate mod success. Started to run ComBat, which is quite slow...")
+          combat <- sva::ComBat(dat=beta,batch=batch_temp,mod=mod)
+          print("checked")
+          if(logitTrans){
+            combat=ilogit2(combat)
+            }
+          if (is.na(combat[1,1])){
+            print("found na,try another")
+            combat <- sva::ComBat(dat = beta_2[,-1],pd$batch,mod = mod)
+            }
+          return(combat)
+          }
+        library(sva)
+        #i = 1
+        for(i in 1:length(batchname)){
+          message("\n<< Start Correcting ",batchname[i]," >>")
+          if(i+1 <= length(batchname)){
+            formdf <- as.formula(paste(" ~ ",paste(c(variablename,batchname[(i+1):length(batchname)]),collapse=" +
+                                                   "),sep=""))
+            }else{
+              formdf <- as.formula(paste(" ~",variablename))
+              }
+          batch_temp <- pd[,batchname[i]] %>% unlist()
+          print(batch_temp)
+          print(formdf)
+          beta <- innercombat(beta,beta_2,batch_temp,formdf,pd = pd,logitTrans = logitTrans)
+          }
+        beta <- as.data.frame(beta)
+        beta <- beta %>% mutate(idx = beta_rownames) %>% relocate(idx)
+        if(is.null(beta)){
+          message("Sorry, Combat process run failed. Your old dataset will be returned.")
+          return(beta_2)
+          }else{
+            message("Combat process run success. Corrected dataset will be returned.")
+            return(beta)
+            }
+        message("[<<< COMBAT END >>>]")
+        }
+      if (self$projectType == "expr"){
+        design <- model.matrix( ~ 0 + factor(self$pdata[[self$group_index]]))
+        mat = limma::removeBatchEffect(self$array[,-1], batch = self$pdata[[self$batch_index]], design = design)
+        mat <- mat %>% dplyr::mutate(GENEID = self$probel) %>% relocate(GENEID)
+        self$removebatch_array <- mat
+      } else {
+        mat <- rrbs_ComBat2batcheffects(beta = self$array,
+                                     pd = self$pdata,
+                                     variablename = self$group_index,
+                                     batchname=self$batch_index,
+                                     logitTrans=TRUE)
+        self$removebatch_array <- mat
+      }
+      
     },
     #' @method feature filter
     #' @param pct num range(0-1), the ratetio to filter
@@ -82,10 +325,16 @@ EntClass <- R6::R6Class(
     },
     #' @method Plot PCA
     #' @param ntop num select the ntop rows by variance, default as 500
+    #' @param batchremove logit use batchremove_array when true
     #' @return data.frame
-    PlotPCA = function(ntop = 500){
-        # calculate the variance for each row
+    PlotPCA = function(ntop = 500,batchremove = FALSE){
+      if (batchremove){
+        array <- self$removebatch_array[,-1] %>% as.matrix()
+      } else {
         array <- self$array[,-1] %>% as.matrix()
+      }
+        # calculate the variance for each row
+        
         pdata <- self$pdata
         batchname <- c(self$group_index,self$batch_index)
         rv <- rowVars(array)
@@ -115,11 +364,16 @@ EntClass <- R6::R6Class(
     #' @method Plot SNE
     #' @param ntop num select the ntop rows by variance, default as 500
     #' @param dim num the dim of Rtsne,default as 2
+    #' @param batchremove logit use batchremove_array when true
     #' @return data.frame
-    PlotSNE = function(ntop = 500,dim = 2){
+    PlotSNE = function(ntop = 500,dim = 2,batchremove = FALSE){
       # To-Do,some var should be fix in tsne analysis
       # calculate the variance for each row
-      array <- self$array[,-1] %>% as.matrix()
+      if (batchremove){
+        array <- self$removebatch_array[,-1] %>% as.matrix()
+      } else {
+        array <- self$array[,-1] %>% as.matrix()
+      }
       pdata <- self$pdata
       batchname <- c(self$group_index,self$batch_index)
       rv <- rowVars(array)
@@ -151,7 +405,7 @@ EntClass <- R6::R6Class(
     toExprSet = function(){
       newitem <- ExprEntClass$new(self$array,self$pdata,
                                   self$group_index,self$batch_index,
-                                  self$barcode_index,self$normal_array,
+                                  self$barcode_index,self$removebatch_array,
                                   self$DA_result)
       return(newitem)
     },
@@ -160,7 +414,8 @@ EntClass <- R6::R6Class(
     toMethySet = function(){
       newitem <- MethylEntClass$new(self$array,self$pdata,
                                     self$group_index,self$batch_index,
-                                    self$barcode_index,self$DA_result)
+                                    self$barcode_index,self$removebatch_array,
+                                    self$DA_result)
       return(newitem)
     },
     #' @method normalization transform
@@ -179,11 +434,17 @@ EntClass <- R6::R6Class(
     #' @method Different Analysis_workflow 
     #' @param adjust.method chr the adjust.method of limma
     #' @param adjPVal num the adjust p value, default as 0.05
+    #' @param batchremove logit use batchremove_array when true
     #' @return data.frame
-    DifferentAnalysis_workflow = function(adjust.method = "BH",adjPVal = 0.05){
+    DifferentAnalysis_workflow = function(adjust.method = "BH",adjPVal = 0.05,batchremove = FALSE){
+      if (batchremove){
+        beta <- self$removebatch_array[,-1] 
+        rownames(beta) <- self$removebatch_array[,1] 
+      } else {
+        beta <- self$array[,-1]
+        rownames(beta) <- self$array[,1]
+      }
       library(limma)
-      beta <- self$array[,-1]
-      rownames(beta) <- self$array[,1]
       design <- model.matrix( ~ 0 + factor(self$pdata[[self$group_index]]))
       colnames(design) <- levels(factor(self$pdata[[self$group_index]]))
       contrast.matrix <- makeContrasts(contrasts=paste(colnames(design)[2:1],collapse="-"), levels=colnames(design))

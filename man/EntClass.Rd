@@ -18,6 +18,9 @@ Entitem <- EntClass$new(array = NULL,pdata = NULL)
 \describe{
 \item{\code{array}}{data.frame data.frame of expression/methylation matrix data, first column is the probel id}
 
+\item{\code{array_bk}}{data.frame the back up the old data.frame of expression/methylation matrix data, first column is the
+probel id}
+
 \item{\code{pdata}}{data.frame data.frame of the clinical data of the related matrix data}
 
 \item{\code{probel}}{vector the probel of the matrix}
@@ -32,9 +35,11 @@ Entitem <- EntClass$new(array = NULL,pdata = NULL)
 
 \item{\code{tsne}}{data.frame the T-SNE analysis result}
 
-\item{\code{normal_array}}{data.frame the normalized array}
+\item{\code{removebatch_array}}{data.frame the array with batch effects removed}
 
 \item{\code{DA_result}}{data.frame the differential analysis result}
+
+\item{\code{projectType}}{expr or methy}
 }
 \if{html}{\out{</div>}}
 }
@@ -43,6 +48,9 @@ Entitem <- EntClass$new(array = NULL,pdata = NULL)
 \itemize{
 \item \href{#method-EntClass/MatrixSet-new}{\code{EntClass$new()}}
 \item \href{#method-EntClass/MatrixSet-info}{\code{EntClass$info()}}
+\item \href{#method-EntClass/MatrixSet-use_removebatch}{\code{EntClass$use_removebatch()}}
+\item \href{#method-EntClass/MatrixSet-probel_annotate}{\code{EntClass$probel_annotate()}}
+\item \href{#method-EntClass/MatrixSet-removeBatch}{\code{EntClass$removeBatch()}}
 \item \href{#method-EntClass/MatrixSet-feature_filter}{\code{EntClass$feature_filter()}}
 \item \href{#method-EntClass/MatrixSet-PlotPCA}{\code{EntClass$PlotPCA()}}
 \item \href{#method-EntClass/MatrixSet-PlotSNE}{\code{EntClass$PlotSNE()}}
@@ -63,7 +71,11 @@ Entitem <- EntClass$new(array = NULL,pdata = NULL)
   pdata = NULL,
   group_index = "group",
   batch_index = "batch",
-  barcode_index = "sampleid"
+  barcode_index = "sampleid",
+  normalized = FALSE,
+  remove_batch = FALSE,
+  differential = FALSE,
+  projectType = c("expr", "methy")
 )}\if{html}{\out{</div>}}
 }
 
@@ -79,6 +91,14 @@ Entitem <- EntClass$new(array = NULL,pdata = NULL)
 \item{\code{batch_index}}{char the colname of the batch_index infomation in pdata}
 
 \item{\code{barcode_index}}{char the colname of the barcode infomation in pdata}
+
+\item{\code{normalized}}{logit auto normalized when true}
+
+\item{\code{remove_batch}}{logit auto remove batch effect when true}
+
+\item{\code{differential}}{logit auto differential analysis when true}
+
+\item{\code{projectType}}{expr or methy}
 }
 \if{html}{\out{</div>}}
 }
@@ -93,6 +113,49 @@ Entitem <- EntClass$new(array = NULL,pdata = NULL)
 
 \subsection{Returns}{
 str
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-EntClass/MatrixSet-use_removebatch"></a>}}
+\if{latex}{\out{\hypertarget{method-EntClass/MatrixSet-use_removebatch}{}}}
+\subsection{Method \code{use_removebatch()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{EntClass$use_removebatch()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+data.frame
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-EntClass/MatrixSet-probel_annotate"></a>}}
+\if{latex}{\out{\hypertarget{method-EntClass/MatrixSet-probel_annotate}{}}}
+\subsection{Method \code{probel_annotate()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{EntClass$probel_annotate(methyltype = c("promoter", "cpg"))}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{methyltype}}{chr promoter or cpg}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+data.frame
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-EntClass/MatrixSet-removeBatch"></a>}}
+\if{latex}{\out{\hypertarget{method-EntClass/MatrixSet-removeBatch}{}}}
+\subsection{Method \code{removeBatch()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{EntClass$removeBatch()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+matrix
 }
 }
 \if{html}{\out{<hr>}}
@@ -119,13 +182,15 @@ matrix
 \if{latex}{\out{\hypertarget{method-EntClass/MatrixSet-PlotPCA}{}}}
 \subsection{Method \code{PlotPCA()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{EntClass$PlotPCA(ntop = 500)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{EntClass$PlotPCA(ntop = 500, batchremove = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{ntop}}{num select the ntop rows by variance, default as 500}
+
+\item{\code{batchremove}}{logit use batchremove_array when true}
 }
 \if{html}{\out{</div>}}
 }
@@ -138,7 +203,7 @@ data.frame
 \if{latex}{\out{\hypertarget{method-EntClass/MatrixSet-PlotSNE}{}}}
 \subsection{Method \code{PlotSNE()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{EntClass$PlotSNE(ntop = 500, dim = 2)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{EntClass$PlotSNE(ntop = 500, dim = 2, batchremove = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -147,6 +212,8 @@ data.frame
 \item{\code{ntop}}{num select the ntop rows by variance, default as 500}
 
 \item{\code{dim}}{num the dim of Rtsne,default as 2}
+
+\item{\code{batchremove}}{logit use batchremove_array when true}
 }
 \if{html}{\out{</div>}}
 }
@@ -202,7 +269,11 @@ data.frame
 \if{latex}{\out{\hypertarget{method-EntClass/MatrixSet-DifferentAnalysis_workflow}{}}}
 \subsection{Method \code{DifferentAnalysis_workflow()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{EntClass$DifferentAnalysis_workflow(adjust.method = "BH", adjPVal = 0.05)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{EntClass$DifferentAnalysis_workflow(
+  adjust.method = "BH",
+  adjPVal = 0.05,
+  batchremove = FALSE
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -211,6 +282,8 @@ data.frame
 \item{\code{adjust.method}}{chr the adjust.method of limma}
 
 \item{\code{adjPVal}}{num the adjust p value, default as 0.05}
+
+\item{\code{batchremove}}{logit use batchremove_array when true}
 }
 \if{html}{\out{</div>}}
 }

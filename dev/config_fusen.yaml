@@ -5,6 +5,7 @@ flat_first.Rmd:
   - R/bagginsclass.R
   - R/entclass.R
   - R/exprentclass.R
+  - R/methylentclass.R
   - R/moriaclass.R
   - R/samwiseclass.R
   tests:
@@ -13,6 +14,7 @@ flat_first.Rmd:
   - tests/testthat/test-moriaclass.R
   - tests/testthat/test-entclass.R
   - tests/testthat/test-exprentclass.R
+  - tests/testthat/test-methylentclass.R
   vignettes: vignettes/get-started.Rmd
   inflate:
     flat_file: dev/flat_first.Rmd
