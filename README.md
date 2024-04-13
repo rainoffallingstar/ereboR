@@ -1,10 +1,15 @@
+
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 # erebor
 
-<img src="https://gitee.com/rainoffallingstar/rainoffallingstar/blob/mydraft/_imgbed/erebor.png" height="200" align="right"/> <!-- badges: start --> <!-- badges: end -->
+<img src="https://github.com/rainoffallingstar/ereboR/tree/master/dev/erebor.png" height="200" align="right"/>
+<!-- badges: start -->
 
-The goal of erebor is to build a R6-based package for bulk RNAseq and RRBS analysis.
+<!-- badges: end -->
+
+The goal of erebor is to build a R6-based package for bulk RNAseq and
+RRBS analysis.
 
 ## Installation
 
@@ -32,5 +37,5 @@ SamwiseClass$new(...)
 ## download public data from TGCA/GEO
 
 laml <- MoriaClass$new(mine = "TCGA-LAML",Dwarf_worker = "TGCA")
-laml$download()
+#laml$download()
 ```
