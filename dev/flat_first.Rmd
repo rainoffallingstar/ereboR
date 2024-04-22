@@ -711,8 +711,8 @@ MoriaClass <- R6::R6Class(
         return(data)
       } else if (self$Dwarf_worker == "GEO"){
         message("download from GEO, creating data dir...")
-        fs::dir_create('data/')
-        data <- GEOquery::getGEO(self$mine,destdir = 'data/')
+        fs::dir_create('temp/')
+        data <- GEOquery::getGEO(self$mine,destdir = 'temp/')
         return(data)
       }else {
         stop("the Dwarf_worker should be TGCA/GEO.")
