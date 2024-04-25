@@ -92,8 +92,8 @@ MoriaClass <- R6::R6Class(
         return(data)
       } else if (self$Dwarf_worker == "GEO"){
         message("download from GEO, creating data dir...")
-        fs::dir_create('temp/')
-        data <- GEOquery::getGEO(self$mine,destdir = 'temp/')
+        fs::dir_create('temp')
+        data <- GEOquery::getGEO(self$mine,destdir = 'temp')
         arraydata <- data[[1]]@assayData$exprs
         pdata <- data[[1]]@phenoData@data
         metadata <- data.frame(
