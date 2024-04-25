@@ -103,13 +103,17 @@ MoriaClass <- R6::R6Class(
         for (i in 1:length(data)){
           arraydata <- data[[i]]@assayData$exprs
           pdata <- data[[i]]@phenoData@data
+          supplementary_file = data[[i]]@experimentData@other$supplementary_file
+          if (is.null(supplementary_file)) {
+            supplementary_file <- NA
+          }
           metadata <- data.frame(
             gseid = self$mine,
             platform = data[[i]]@annotation,
             title = data[[i]]@experimentData@title,
             abstract = data[[i]]@experimentData@abstract,
             summary =  data[[i]]@experimentData@other$summary,
-            supplementary_file = data[[i]]@experimentData@other$supplementary_file,
+            supplementary_file = supplementary_file,
             type = data[[i]]@experimentData@other$type,
             samplenum = nrow(data[[i]]@phenoData@data)
           )
