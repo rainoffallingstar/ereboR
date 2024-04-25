@@ -94,38 +94,51 @@ MoriaClass <- R6::R6Class(
         message("download from GEO, creating data dir...")
         fs::dir_create('temp')
         data <- GEOquery::getGEO(self$mine,destdir = 'temp')
-        arraydata <- data[[1]]@assayData$exprs
-        pdata <- data[[1]]@phenoData@data
-        metadata <- data.frame(
-          gseid = self$mine,
-          platform = data[[1]]@experimentData@other$platform_id,
-          title = data[[1]]@experimentData@title,
-          abstract = data[[1]]@experimentData@abstract,
-          summary =  data[[1]]@experimentData@other$summary,
-          supplementary_file = data[[1]]@experimentData@other$supplementary_file,
-          type = data[[1]]@experimentData@other$type,
-          samplenum = nrow(data[[1]]@phenoData@data)
+        if (length(data) > 1){
+          datalist <- list()
+        } else {
+          datalist <- NULL
+        }
+        
+        for (i in 1:length(data)){
+          arraydata <- data[[i]]@assayData$exprs
+          pdata <- data[[i]]@phenoData@data
+          metadata <- data.frame(
+            gseid = self$mine,
+            platform = data[[i]]@annotation,
+            title = data[[i]]@experimentData@title,
+            abstract = data[[i]]@experimentData@abstract,
+            summary =  data[[i]]@experimentData@other$summary,
+            supplementary_file = data[[i]]@experimentData@other$supplementary_file,
+            type = data[[i]]@experimentData@other$type,
+            samplenum = nrow(data[[i]]@phenoData@data)
           )
         if (nrow(arraydata) == 0){
           message("array not found, download supplementary to data dir")
-          fs::dir_create("data")
+          fs::dir_create(paste0("data/",self$mine,"_",i))
           ftps <- metadata$supplementary_file[1]
           ftps <- stringr::str_split(ftps,"\n")
           ftps <- ftps[[1]]
-          for (i in 1:length(ftps)){
-            filename <- stringr::str_split(ftps[i],"/")
+          for (a in 1:length(ftps)){
+            filename <- stringr::str_split(ftps[a],"/")
             filename <- filename[[1]]
             filename <- filename[length(filename)]
-            localfilepath <- paste0("data/",self$mine,"/",filename)
-            download.file(ftps[i],localfilepath, method = "ftp")
+            localfilepath <- paste0("data/",self$mine,"_",i,"/",filename)
+            download.file(ftps[a],localfilepath, method = "ftp")
           }
         }
-        data <- list(
+        templist <- list(
           arraydata = arraydata,
           pdata = pdata,
           metadata = metadata
         )
-        return(data)
+        if (is.null(datalist)){
+          datalist <- templist
+        } else {
+          datalist[[i]] <- templist
+        }
+        }
+        return(datalist)
       }else {
         stop("the Dwarf_worker should be TGCA/GEO.")
       }
