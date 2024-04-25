@@ -94,6 +94,37 @@ MoriaClass <- R6::R6Class(
         message("download from GEO, creating data dir...")
         fs::dir_create('temp/')
         data <- GEOquery::getGEO(self$mine,destdir = 'temp/')
+        arraydata <- data[[1]]@assayData$exprs
+        pdata <- data[[1]]@phenoData@data
+        metadata <- data.frame(
+          gseid = self$mine,
+          platform = data[[1]]@experimentData@other$platform_id,
+          title = data[[1]]@experimentData@title,
+          abstract = data[[1]]@experimentData@abstract,
+          summary =  data[[1]]@experimentData@other$summary,
+          supplementary_file = data[[1]]@experimentData@other$supplementary_file,
+          type = data[[1]]@experimentData@other$type,
+          samplenum = nrow(data[[1]]@phenoData@data)
+          )
+        if (nrow(arraydata) == 0){
+          message("array not found, download supplementary to data dir")
+          fs::dir_create("data")
+          ftps <- metadata$supplementary_file[1]
+          ftps <- stringr::str_split(ftps,"\n")
+          ftps <- ftps[[1]]
+          for (i in 1:length(ftps)){
+            filename <- stringr::str_split(ftps[i],"/")
+            filename <- filename[[1]]
+            filename <- filename[length(filename)]
+            localfilepath <- paste0("data/",self$mine,"/",filename)
+            download.file(ftps[i],localfilepath, method = "ftp")
+          }
+        }
+        data <- list(
+          arraydata = arraydata,
+          pdata = pdata,
+          metadata = metadata
+        )
         return(data)
       }else {
         stop("the Dwarf_worker should be TGCA/GEO.")
