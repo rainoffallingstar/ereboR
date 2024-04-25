@@ -747,7 +747,7 @@ MoriaClass <- R6::R6Class(
             filename <- filename[[1]]
             filename <- filename[length(filename)]
             localfilepath <- paste0("data/",self$mine,"_",i,"/",filename)
-            download.file(ftps[a],localfilepath, method = "ftp")
+            download.file(ftps[a],localfilepath, method = "auto")
           }
         }
         templist <- list(
