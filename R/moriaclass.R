@@ -41,9 +41,9 @@ MoriaClass <- R6::R6Class(
     },
 #' begin download
 #' @method download task
-#' 
+#' @param sup logit download sup file when TRUE
 #' @return list
-    download = function(){
+    download = function(sup = TRUE){
       get_gdc_data <- function(project,dataca = "Transcriptome Profiling",
                                data_type = "Gene Expression Quantification"){
         library(SummarizedExperiment)
@@ -117,7 +117,7 @@ MoriaClass <- R6::R6Class(
             type = data[[i]]@experimentData@other$type,
             samplenum = nrow(data[[i]]@phenoData@data)
           )
-        if (nrow(arraydata) == 0){
+        if (nrow(arraydata) == 0 & sup){
           message("array not found, download supplementary to data dir")
           fs::dir_create(paste0("data/",self$mine,"_",i))
           ftps <- metadata$supplementary_file[1]

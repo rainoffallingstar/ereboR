@@ -74,9 +74,16 @@ begin download
 \if{latex}{\out{\hypertarget{method-TGCA_GEO_Miner-download}{}}}
 \subsection{Method \code{download()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{MoriaClass$download()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{MoriaClass$download(sup = TRUE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{sup}}{logit download sup file when TRUE}
+}
+\if{html}{\out{</div>}}
+}
 \subsection{Returns}{
 list
 }
