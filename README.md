@@ -34,6 +34,15 @@ BagginsClass$new(...)
 
 SamwiseClass$new(...)
 
+### root_dir 是放bam文件的目录
+### 注意，这个包在运行结束后会将bam文件拷贝到processed目录
+samwise <- erebor::SamwiseClass$new(root_dir = ".",
+                         methyratio_py = "methratio.py",
+                         gene_fa = "Genedata/hg19.fa")
+# 提取甲基化位点，并转化为bismark_cov格式,
+#可以指定一个装有python2.7的conda环境(如果不为NULL)
+samwise$bam2methyratio(save2bismark = T,use_conda_env = "py27")
+
 ## download public data from TGCA/GEO
 
 laml <- MoriaClass$new(mine = "TCGA-LAML",Dwarf_worker = "TGCA")

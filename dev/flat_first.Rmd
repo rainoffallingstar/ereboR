@@ -347,9 +347,11 @@ initialize_dirs = function() {
   }, 
 #' @method bam2methyratio
 #' 从BAM文件中计算methyratio值
+#' @param save2bismark default as F,generate a bismark_cov bedgraph file if True
+#' @param use_conda_env use a conda env if not NULL
 #'
 #' @return methyratio
-bam2methyratio = function() {
+bam2methyratio = function(save2bismark = F,use_conda_env = NULL) {
     print(paste("info, Step 2, Get methyratio values from bam files and transfer to bedgraph files"))
     bamfiles <- list.files(self$root_dir, pattern = "\\.bam$", recursive = FALSE)
     fs::dir_create(self$methyratio_dir)
@@ -363,10 +365,15 @@ bam2methyratio = function() {
         ".bedgraph"))
       # python3 /home/rstudio/methy2expr/dev/BSMAPz-master/methratio.py -o test.txt
       #-d /home/rstudio/methy2expr/dev/hg19/hg19.fa 23T035358.bam
-      system(paste("python2", self$methyratio_py, "-I -o", output_dir_txt, "-d", self$gene_fa, paste0(self$root_dir,
-        "/", bamfiles[i])))
+      command <- paste("python2", self$methyratio_py, "-I -o", output_dir_txt, "-d", self$gene_fa, paste0(self$root_dir,
+        "/", bamfiles[i]))
+      if (!is.null(use_conda_env)){
+        command <- paste("conda run -n",use_conda_env,command)
+      }
+      system(command = command)
       print(paste("info,", paste0(i, "/", length(bamfiles)), ",start packing bedgraph files", bamfiles[i]))
       # 禁用科学计数法
+      library(data.table)
       options(scipen = 9999)
       temp_df <- data.table::fread(output_dir_txt, header = TRUE, stringsAsFactors = FALSE) %>%
         dplyr::select(chr, pos, ratio) %>%
@@ -374,6 +381,20 @@ bam2methyratio = function() {
         dplyr::rename(end = pos) %>%
         dplyr::select(chr, start, end, ratio)
       data.table::fwrite(temp_df, file = output_dir_bed, sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+      if (save2bismark){
+        bismark_output <- stringr::str_replace(output_dir_bed,".bedgraph",".bismark_cov")
+        bsmapz_data <- data.table::fread(input_file, sep = "\t", header = TRUE)
+        # 转换为 Bismark Coverage 格式，pos 需要减 1
+        bismark_cov <- bsmapz_data[, .(
+          chr,                # 染色体名称
+          start = pos - 1,    # pos 转换为 0-based 坐标
+          methylation_ratio = round(ratio * 100, 2),  # 转为百分比并保留两位小数
+          methylated = C_counts,                     # 被甲基化的读段数量
+          unmethylated = CT_counts - C_counts        # 非甲基化读段数量
+          )]
+        # 写入输出文件
+        data.table::fwrite(bismark_cov, bismark_output, sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+      }
       print(paste("info,", paste0(i, "/", length(bamfiles)), ",start clean files in temp dirs with txt and bam"))
       fs::file_delete(output_dir_txt)
       fs::file_delete(paste0(self$root_dir, "/", bamfiles[i]))

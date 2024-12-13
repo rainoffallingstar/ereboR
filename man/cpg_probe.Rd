@@ -153,9 +153,18 @@ NULL
 \if{latex}{\out{\hypertarget{method-rrbs_workflow-bam2methyratio}{}}}
 \subsection{Method \code{bam2methyratio()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SamwiseClass$bam2methyratio()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{SamwiseClass$bam2methyratio(save2bismark = F, use_conda_env = NULL)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{save2bismark}}{default as F,generate a bismark_cov bedgraph file if True}
+
+\item{\code{use_conda_env}}{use a conda env if not NULL}
+}
+\if{html}{\out{</div>}}
+}
 \subsection{Returns}{
 methyratio
 }
