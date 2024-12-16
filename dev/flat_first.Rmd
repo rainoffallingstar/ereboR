@@ -349,9 +349,11 @@ initialize_dirs = function() {
 #' 从BAM文件中计算methyratio值
 #' @param save2bismark default as F,generate a bismark_cov bedgraph file if True
 #' @param use_conda_env use a conda env if not NULL
+#' @param cores cpu cores to be used
+#' @param mem memory to be used
 #'
 #' @return methyratio
-bam2methyratio = function(save2bismark = F,use_conda_env = NULL) {
+bam2methyratio = function(save2bismark = F,use_conda_env = NULL,cores = 16, mem = 100000) {
     print(paste("info, Step 2, Get methyratio values from bam files and transfer to bedgraph files"))
     bamfiles <- list.files(self$root_dir, pattern = "\\.bam$", recursive = FALSE)
     fs::dir_create(self$methyratio_dir)
@@ -365,7 +367,7 @@ bam2methyratio = function(save2bismark = F,use_conda_env = NULL) {
         ".bedgraph"))
       # python3 /home/rstudio/methy2expr/dev/BSMAPz-master/methratio.py -o test.txt
       #-d /home/rstudio/methy2expr/dev/hg19/hg19.fa 23T035358.bam
-      command <- paste("python2", self$methyratio_py, "-I -o", output_dir_txt, "-d", self$gene_fa, paste0(self$root_dir,
+      command <- paste("python2", self$methyratio_py, "-I -o", output_dir_txt,"-M",mem,"-N",cores, "-d", self$gene_fa, paste0(self$root_dir,
         "/", bamfiles[i]))
       if (!is.null(use_conda_env)){
         command <- paste("conda run -n",use_conda_env,command)

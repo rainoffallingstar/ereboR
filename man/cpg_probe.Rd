@@ -153,7 +153,12 @@ NULL
 \if{latex}{\out{\hypertarget{method-rrbs_workflow-bam2methyratio}{}}}
 \subsection{Method \code{bam2methyratio()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{SamwiseClass$bam2methyratio(save2bismark = F, use_conda_env = NULL)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{SamwiseClass$bam2methyratio(
+  save2bismark = F,
+  use_conda_env = NULL,
+  cores = 16,
+  mem = 1e+05
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -162,6 +167,10 @@ NULL
 \item{\code{save2bismark}}{default as F,generate a bismark_cov bedgraph file if True}
 
 \item{\code{use_conda_env}}{use a conda env if not NULL}
+
+\item{\code{cores}}{cpu cores to be used}
+
+\item{\code{mem}}{memory to be used}
 }
 \if{html}{\out{</div>}}
 }
